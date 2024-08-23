@@ -27,8 +27,8 @@ class SimpleTags_Client_Autolinks
 			add_filter('the_posts', array(__CLASS__, 'the_posts'), 10);
 
 			//new UI
-			add_filter('the_content', array(__CLASS__, 'taxopress_autolinks_the_content'), 12);
-			add_filter('the_title', array(__CLASS__, 'taxopress_autolinks_the_title'), 12);
+			add_filter('the_content', array(__CLASS__, 'taxopress_autolinks_the_content'), 5);
+			add_filter('the_title', array(__CLASS__, 'taxopress_autolinks_the_title'), 5);
 		}
 	}
 
@@ -277,11 +277,57 @@ class SimpleTags_Client_Autolinks
 			$autolinked_contents = [];
 		}
 
+
 		if (isset($autolinked_contents[$content_key])) {
 			$content = $autolinked_contents[$content_key];
 			return $content;
 		}
 
+		// process blocks exclusion
+		if (is_array($search_lists[0]['options']) && !empty($search_lists[0]['options']['blocks_exclusion'])) {
+			$blocks_exclusion = $search_lists[0]['options']['blocks_exclusion'];
+			$process = function($item) {
+				// Replace "core/" prefixes
+				$item = str_replace("core/", "", $item);
+				// Add "wp:" prefixes
+				return "wp:" . $item;
+			};
+			// Apply the processing function to each element of the array
+			$blocks_to_exclude = array_map($process, $blocks_exclusion);
+
+			// Escape special characters for regex pattern
+			$escaped_blocks = array_map(function($block) {
+				return preg_quote($block, '/');
+			}, $blocks_to_exclude);
+
+			// Create a regex pattern from the block names
+			$pattern = '/<!-- (' . implode('|', $escaped_blocks) . ')(.*?)-->(.*?)<!-- \/wp\:(.*?) -->/s';
+			
+			$content = preg_replace_callback(
+				$pattern,
+				function ($matches) {
+					// Return the matched block content wrapped in taxopressnotag
+					return '<taxopressnotag>' . $matches[0] . '</taxopressnotag>';
+				},
+				$content
+			);
+		}
+		
+		// process shortcodes exclusion
+		if (is_array($search_lists[0]['options']) && !empty($search_lists[0]['options']['shortcodes_exclusion'])) {
+			$shortcodes_exclusion = $search_lists[0]['options']['shortcodes_exclusion'];
+			
+			// Create a regex pattern to match any of the shortcodes with or without attributes
+			$pattern = '/\[(?:' . implode('|', $shortcodes_exclusion) . ')[^\]]*\]/';
+			
+			// Define the replacement function to wrap matched shortcodes
+			$callback = function($matches) {
+				return '<taxopressnotag>' . $matches[0] . '</taxopressnotag>';
+			};
+
+			// Apply the regex pattern to the content using the callback
+			$content = preg_replace_callback($pattern, $callback, $content);
+		}
 
 		//replace html entity with their entity code
 		foreach (taxopress_html_character_and_entity() as $enity => $code) {
@@ -290,12 +336,12 @@ class SimpleTags_Client_Autolinks
 
 		// Replace HTML entities with placeholders
 		$content = preg_replace_callback('/&#(\d+);/', function($matches) {
-			return '|TAXOPRESSENTITY' . $matches[1] . 'TAXOPRESSENTITY|';
+			return 'STARTTAXOPRESSENTITY' . $matches[1] . 'TAXOPRESSENTITYEND';
 		}, $content);
 
 		//$content = str_replace('&#','|--|',$content);//https://github.com/TaxoPress/TaxoPress/issues/824
 		//$content = str_replace('&','&#38;',$content); //https://github.com/TaxoPress/TaxoPress/issues/770*/
-		$content = '||starttaxopressrandom||' . $content . '||endtaxopressrandom||'; //we're having issue when content start with styles https://wordpress.org/support/topic/3-7-2-auto-link-case-not-working/#post-16665257
+		$content = 'starttaxopressrandom' . $content . 'endtaxopressrandom'; //we're having issue when content start with styles https://wordpress.org/support/topic/3-7-2-auto-link-case-not-working/#post-16665257
 		//$content = utf8_decode($content);
 
 		libxml_use_internal_errors(true);
@@ -305,6 +351,7 @@ class SimpleTags_Client_Autolinks
 		
 		// Load the content as HTML without adding DOCTYPE and html/body tags
 		$content = '<div>' . $content . '</div>';
+
 		$content = @mb_convert_encoding($content, 'HTML-ENTITIES', "UTF-8");
 		$result = $dom->loadHTML($content, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
 
@@ -367,6 +414,7 @@ class SimpleTags_Client_Autolinks
 				$option_tagged_counts[$detail_id] = 0;
 			}
 
+			$html_exclusion[] = 'taxopressnotag';
 			$html_exclusion[] = 'meta';
 			$html_exclusion[] = 'link';
 			$html_exclusion[] = 'head';
@@ -428,7 +476,11 @@ class SimpleTags_Client_Autolinks
 					$same_usage_max = min($term_limits[$detail_id], $option_remaining[$detail_id]);
 				}
 
-				
+				// Replace HTML entities with placeholders in term name too to match them in content
+				$search = preg_replace_callback('/&#(\d+);/', function($matches) {
+					return 'STARTTAXOPRESSENTITY' . $matches[1] . 'TAXOPRESSENTITYEND';
+				}, wptexturize($search));
+
 				//if ('i' === $case) {
 				if ($autolink_case === 'none') { // retain case
 					$replaced = preg_replace_callback('/(?<!\w)' . preg_quote($search, "/") . '(?!\w)/i', function($matches) use ($link_openeing, $link_closing) {
@@ -479,19 +531,25 @@ class SimpleTags_Client_Autolinks
 		}
 		
 		// Add back the starting "&#"
-		$content = str_replace('|TAXOPRESSENTITY', '&#', $content);
+		$content = str_replace('STARTTAXOPRESSENTITY', '&#', $content);
 		// Add back the ending ";"
-		$content = str_replace('TAXOPRESSENTITY|', ';', $content);
+		$content = str_replace('TAXOPRESSENTITYEND', ';', $content);
 
 		// get only the body tag with its contents, then trim the body tag itself to get only the original content
 		//$content = mb_substr($dom->saveHTML($xpath->query('//body')->item(0)), 6, -7, "UTF-8");
 		$content = str_replace('|--|', '&#', $content); //https://github.com/TaxoPress/TaxoPress/issues/824
-		$content = str_replace('&#60;', '<', $content);
-		$content = str_replace('&#62;', '>', $content);
+		/**
+		 * I commented the line below because of https://github.com/TaxoPress/TaxoPress/issues/2118
+		 * In summary, when content contain < and > special character which are intentiona;, they're been
+		 * changed to < > which is not needed
+		 */
+		//$content = str_replace('&#60;', '<', $content);
+		//$content = str_replace('&#62;', '>', $content);
 		
 		foreach (taxopress_html_character_and_entity(true) as $enity => $code) {
 			$content = str_replace($enity, $code, $content);
 		}
+
 		$content = str_replace('&amp ;rsquo;', '&rsquo;', $content);
 		$content = str_replace(['’', ' ’', '&rsquor;', ' &rsquor;', '&rsquo;', ' &rsquo;'], '\'', $content);
 
@@ -499,8 +557,11 @@ class SimpleTags_Client_Autolinks
 		$content = str_replace(';amp;', ';', $content); //https://github.com/TaxoPress/TaxoPress/issues/810
 		$content = str_replace('%7C--%7C038;', '&', $content); //https://github.com/TaxoPress/TaxoPress/issues/1377
 
-		$content = str_replace('||starttaxopressrandom||', '',  $content);
-		$content = str_replace('||endtaxopressrandom||', '', $content);
+		$content = str_replace('starttaxopressrandom', '',  $content);
+		$content = str_replace('endtaxopressrandom', '', $content);
+		// replace <taxopressnotag> added to skip certain elements
+		$content = str_replace('<taxopressnotag>', '', $content);
+		$content = str_replace('</taxopressnotag>', '', $content);
 
 	}
 
@@ -725,8 +786,9 @@ class SimpleTags_Client_Autolinks
 						$excludes_terms = array_filter($excludes_terms, '_delete_empty_element');
 						$excludes_terms = array_unique($excludes_terms);
 					}
-
+					
 					$z = 0;
+					
 					foreach ((array) self::$link_tags as $term_name => $term_link) {
 						$z++;
 						// Force string for tags "number"
@@ -738,7 +800,7 @@ class SimpleTags_Client_Autolinks
 						}
 
 						// Make a first test with PHP function, economize CPU with regexp
-						if (false === $strpos_fnc($content, $term_name)) {
+						if (false === $strpos_fnc($post->post_content, $term_name)) {
 							continue;
 						}
 

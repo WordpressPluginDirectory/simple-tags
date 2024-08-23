@@ -104,13 +104,16 @@ class SimpleTags_Admin_Mass {
 		// Display message
 		settings_errors( __CLASS__ );
 		?>
+		<div class="taxopress-block-wrap">
 		<div class="wrap st_wrap tagcloudui st_mass_terms-page admin-settings">
 			<form id="posts-filter" action="" method="get">
 				<input type="hidden" name="page" value="st_mass_terms"/>
 				<input type="hidden" name="taxo" value="<?php echo esc_attr( SimpleTags_Admin::$taxonomy ); ?>"/>
 				<input type="hidden" name="cpt" value="<?php echo esc_attr( SimpleTags_Admin::$post_type ); ?>"/>
 
-        <h2><?php _e( 'Mass edit terms', 'simple-tags' ); ?></h2>
+        <h1><?php _e( 'Mass edit terms', 'simple-tags' ); ?></h1>
+      <br>
+	  <div class="taxopress-description"><?php esc_html_e('This feature allows users to mass edit terms while creating and editing content.', 'simple-tags'); ?></div>
       <br>
 
 				<ul class="subsubsub">
@@ -290,6 +293,8 @@ class SimpleTags_Admin_Mass {
 
 		<div class="taxopress-right-sidebar admin-settings-sidebar">
 			<?php do_action('taxopress_admin_after_sidebar'); ?>
+		</div>
+		
 		</div>
 
 		<?php
