@@ -115,7 +115,7 @@ class SimpleTags_Admin
 			SimpleTags_Autoterms_Content::get_instance();
 			self::$enabled_menus['st_autoterms'] = esc_html__('Auto Terms', 'simple-tags');
 		}
-		
+
 		TaxoPress_AI_Module::get_instance();
 
 		//click terms option
@@ -173,7 +173,7 @@ class SimpleTags_Admin
 
 	/**
 	 * Ajax for saving a feature from dashboard page
-	 * 
+	 *
 	 * Copied from PublishPress Blocks
 	 *
 	 * @return boolean,void     Return false if failure, echo json on success
@@ -435,7 +435,7 @@ class SimpleTags_Admin
 		global $pagenow;
 
 		$select_2_page = false;
-		if (isset($_GET['page']) && in_array($_GET['page'], ['st_posts', 'st_autolinks'])) {
+		if (isset($_GET['page']) && in_array($_GET['page'], ['st_posts', 'st_autolinks', 'st_autoterms'])) {
 			$select_2_page = true;
 		}
 
@@ -472,7 +472,7 @@ class SimpleTags_Admin
 			wp_enqueue_script('taxopress-admin-select2');
 			wp_enqueue_style('taxopress-admin-select2');
 		}
-		
+
 		//Register and enqueue admin js
 		$script_dependencies = ['jquery'];
 		if ($select_2_page) {
@@ -497,6 +497,14 @@ class SimpleTags_Admin
 			'use_media_label' => esc_html__('Use this media', 'simple-tags'),
 			'existing_content_admin_label' => esc_html__('Edit the current setting.', 'simple-tags'),
 			'autoterm_admin_url' => admin_url('admin.php?page=st_autoterms'),
+			'no_terms_message' => esc_html__('No terms will be deleted', 'simple-tags'),
+            'terms_count_message' => esc_html__(' terms will be deleted.', 'simple-tags'),
+			'checking_terms_message' => esc_html__('Checking terms...', 'simple-tags'),
+			'terms_error'            => esc_html__('An error occurred while checking terms.', 'simple-tags'),
+			'post_required' => esc_html__('Kindly select a post to use preview feature.', 'simple-tags'),
+			'save_settings' => esc_html__('Auto Term ID missing. Kindly save the auto term before using this feature.', 'simple-tags'),
+			'delete_label' => esc_html__('Delete', 'simple-tags'),
+			'ai_nonce' => wp_create_nonce('taxopress-ai-ajax-nonce'),
 		]);
 
 
@@ -629,7 +637,7 @@ class SimpleTags_Admin
 				check_admin_referer('updateresetoptions-simpletags');
 
 				$sanitized_options = [];
-				
+
 				// add taxopress ai post type and taxonomies options so we can have all post types. TODO: This need to be a filter
 				foreach (get_post_types(['public' => true], 'names') as $post_type => $post_type_object) {
 					if ($post_type == 'post') {
@@ -640,11 +648,11 @@ class SimpleTags_Admin
 					$options['taxopress_ai_' . $post_type . '_metabox_default_taxonomy'] = $opt_default_value;
 					$options['taxopress_ai_' . $post_type . '_support_private_taxonomy'] = 0;
 					$options['enable_taxopress_ai_' . $post_type . '_metabox'] = $opt_default_value;
-					foreach (['post_terms', 'suggest_local_terms', 'existing_terms', 'open_ai', 'ibm_watson', 'dandelion', 'open_calais'] as $taxopress_ai_tab) {
+					foreach (['post_terms', 'existing_terms', 'suggest_local_terms'] as $taxopress_ai_tab) {
 						$options['enable_taxopress_ai_' . $post_type . '_' . $taxopress_ai_tab . '_tab'] = $opt_default_value;
 					}
 				}
-				
+
 				// add metabox post type and taxonomies options so we can have all post types. TODO: This need to be a filter
 				foreach (taxopress_get_all_wp_roles() as $role_name => $role_info) {
 					if (in_array($role_name, ['administrator', 'editor', 'author', 'contributor'])) {
@@ -976,6 +984,8 @@ class SimpleTags_Admin
 				return esc_html__('Metabox Access', 'simple-tags');
 			case 'linked_terms':
 				return esc_html__('Linked Terms', 'simple-tags');
+			case 'synonyms':
+				return esc_html__('Term Synonyms', 'simple-tags');
 			case 'licence':
 				return esc_html__('License', 'simple-tags');
 		}
@@ -1103,7 +1113,7 @@ class SimpleTags_Admin
 		if (!get_option('taxopress_3_23_0_upgrade_completed')) {
 
 			$options = SimpleTags_Plugin::get_option();
-			
+
 			// add metabox default values
 			$tax_names = array_keys(get_taxonomies([], 'names'));
 			foreach (taxopress_get_all_wp_roles() as $role_name => $role_info) {

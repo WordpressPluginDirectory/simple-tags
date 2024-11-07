@@ -41,7 +41,7 @@ if (!class_exists('TaxoPressAiApi')) {
             if (empty(trim($dandelion_api_token))) {
                 $return['status'] = 'error';
                 $return['message'] = esc_html__(
-                    'The Dandelion integration requires an API Key. Please add your API Key and save the settings.',
+                    'The Dandelion integration requires an API Key. Please add your API Key in the Auto Term settings.',
                     'simple-tags'
                 );
             } elseif (empty(trim($content))) {
@@ -150,7 +150,7 @@ if (!class_exists('TaxoPressAiApi')) {
             if (empty(trim($open_calais_api_key))) {
                 $return['status'] = 'error';
                 $return['message'] = esc_html__(
-                    'The LSEG / Refinitiv integration requires an API Key. Please add your API Key and save the settings.',
+                    'The LSEG / Refinitiv integration requires an API Key. Please add your API Key in the Auto Term settings.',
                     'simple-tags'
                 );
             } elseif (empty(trim($content))) {
@@ -268,7 +268,7 @@ if (!class_exists('TaxoPressAiApi')) {
             if (empty(trim($ibm_watson_api_url)) || empty(trim($ibm_watson_api_key))) {
                 $return['status'] = 'error';
                 $return['message'] = esc_html__(
-                    'The Ibm Watson integration requires an API Key and URL. Please add your API Key and save the settings.',
+                    'The IBM Watson integration requires an API Key and URL. Please add your API Key in the Auto Term settings.',
                     'simple-tags'
                 );
             } elseif (empty(trim($content))) {
@@ -366,6 +366,26 @@ if (!class_exists('TaxoPressAiApi')) {
 
             return $return;
         }
+
+        /**
+         * Clean api response to fix //https://github.com/TaxoPress/TaxoPress/issues/2258
+         */
+        public static function clean_api_response($content) {
+                    
+            //- OpenAI sometimes start response like "Tags:
+            $content = str_replace('Tags: ', '', $content);
+
+            // Remove leading dashes, numbers with a dot, and any extra whitespace
+            $content = preg_replace("/(?:\s*[-–—]\s*|\d+\.\s*)/", "|", $content);
+            
+            // Split by the delimiter "|"
+            $words = array_filter(array_map('trim', explode("|", $content)));
+            
+            // Join into comma-separated list
+            $cleaned_content = implode(", ", $words);
+
+            return $cleaned_content;
+        }
         
 
         /**
@@ -385,9 +405,11 @@ if (!class_exists('TaxoPressAiApi')) {
             $clean_content  = $args['clean_content'];
             $content_source = $args['content_source'];
             $preview_feature = !empty($args['preview_feature']) ? $args['preview_feature'] : '';
+            $taxonomy           = !empty($args['taxonomy']) ? $args['taxonomy'] : '';
             
             $post_id = !empty($args['post_id']) ? (int) $args['post_id'] : 0;
             $open_ai_api_key = !empty($settings_data['open_ai_api_key']) ? $settings_data['open_ai_api_key'] : '';
+            $open_ai_model = !empty($settings_data['open_ai_model']) ? $settings_data['open_ai_model'] : self::OPEN_AI_MODEL;
             $open_ai_cache_result = !empty($settings_data['open_ai_cache_result']) ? $settings_data['open_ai_cache_result'] : '';
 
             $existing_open_ai_result_key = '_taxopress_open_ai_' . $content_source . '_result';
@@ -396,7 +418,7 @@ if (!class_exists('TaxoPressAiApi')) {
             if (empty(trim($open_ai_api_key))) {
                 $return['status'] = 'error';
                 $return['message'] = esc_html__(
-                    'The OpenAI integration requires an API Key. Please add your API Key and save the settings.',
+                    'The OpenAI integration requires an API Key. Please add your API Key in the Auto Term settings.',
                     'simple-tags'
                 );
             } elseif (empty(trim($content))) {
@@ -429,10 +451,15 @@ if (!class_exists('TaxoPressAiApi')) {
                     if (!empty($settings_data['open_ai_tag_prompt'])) {
                         $custom_prompt = sanitize_textarea_field(stripslashes_deep($settings_data['open_ai_tag_prompt']));
                         $prompt = str_replace('{content}', $clean_content, $custom_prompt);
+                        if (!empty($taxonomy) && !empty($post_id)) {
+                            $post_terms_results = wp_get_post_terms($post_id, $taxonomy, ['fields' => 'names']);
+                            $post_terms_comma_join = !empty($post_terms_results) ? join(', ', $post_terms_results) : '';
+                            $prompt = str_replace('{post_terms}', $post_terms_comma_join, $prompt);
+                        }
                     }
                     
                     $body_data = array(
-                        'model'         => self::OPEN_AI_MODEL,
+                        'model'         => $open_ai_model,
                         'messages'    => [
                             [
                                 'role'    => 'system',
@@ -472,10 +499,11 @@ if (!class_exists('TaxoPressAiApi')) {
                             if (!empty($body_data['choices'] )) {
                                 foreach ( $body_data['choices'] as $choice ) {
                                     if ( isset( $choice['message'], $choice['message']['content'] ) ) {
-                                        if (count(array_merge($data, explode(', ', sanitize_text_field( trim( $choice['message']['content'], ' "\'' ) )))) === 1) {
-                                            $data = array_merge($data, [$choice['message']['content']]);
+                                        $cleaned_response = self::clean_api_response($choice['message']['content']);
+                                        if (count(array_merge($data, explode(', ', sanitize_text_field( trim( $cleaned_response, ' "\'' ) )))) === 1) {
+                                            $data = array_merge($data, [$cleaned_response]);
                                         } else {
-                                            $data = array_merge($data, explode(', ', sanitize_text_field( trim( $choice['message']['content'], ' "\'' ) )));
+                                            $data = array_merge($data, explode(', ', sanitize_text_field( trim( $cleaned_response, ' "\'' ) )));
                                         }
                                     }
                                 }

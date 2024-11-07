@@ -14,6 +14,7 @@ class SimpleTags_Client_Autoterms
 			add_action('save_post', array(__CLASS__, 'save_post'), 12, 2);
 			add_action('post_syndicated_item', array(__CLASS__, 'save_post'), 12, 2);
 		}
+		add_filter( 'taxopress_filter_autoterm_content', array(__CLASS__, 'filter_taxopress_autoterm_content'), 10, 3);
 	}
 
 	/**
@@ -73,6 +74,51 @@ class SimpleTags_Client_Autoterms
 		}
 
 		return true;
+	}
+
+	/**
+	 * Filter auto term content
+	 *
+	 * @param string $content Original content to be analyzed. It could include post title,
+	 * content and/excerpt based on autoterms settings
+	 * @param integer $post_id This is the post id
+	 * @param array $options Autoterm settings
+	 *
+	 * @return string
+	 */
+	public static function filter_taxopress_autoterm_content($content, $post_id, $settings_data) {
+
+		// add taxonomies data to content
+		if (!empty($settings_data['find_in_taxonomies_custom_items']) && is_array($settings_data['find_in_taxonomies_custom_items'])) {
+			foreach ($settings_data['find_in_taxonomies_custom_items'] as $taxonomy) {
+				// Fetch all terms in the specified taxonomy
+				$terms = wp_get_post_terms($post_id, $taxonomy, array('fields' => 'names'));
+
+				// Check if there are any terms and then process them
+				if (!is_wp_error($terms) && !empty($terms)) {
+					// Join the term names with a space
+					$joined_terms = implode(' ', $terms);
+					// add data to content
+					$content .= ' ' . $joined_terms;
+				}
+			}
+		}
+
+		// add custom field data to content
+		if (!empty($settings_data['find_in_custom_fields_custom_items']) && is_array($settings_data['find_in_custom_fields_custom_items'])) {
+			foreach ($settings_data['find_in_custom_fields_custom_items'] as $metakey) {
+				// get meta key value
+				$meta_value = get_post_meta($post_id, $metakey, true);
+
+				if (!empty($meta_value)) {
+					// add data to content
+					$content .= ' ' . $meta_value;
+				}
+
+			}
+		}
+
+		return $content;
 	}
 
 	/**
@@ -150,12 +196,26 @@ class SimpleTags_Client_Autoterms
 		$autoterm_use_ibm_watson = isset($options['autoterm_use_ibm_watson']) ? (int) $options['autoterm_use_ibm_watson'] : 0;
 		$autoterm_use_dandelion = isset($options['autoterm_use_dandelion']) ? (int) $options['autoterm_use_dandelion'] : 0;
 		$autoterm_use_opencalais = isset($options['autoterm_use_opencalais']) ? (int) $options['autoterm_use_opencalais'] : 0;
-		$autoterm_regex_code = !empty($options['terms_regex_code']) ? stripslashes($options['terms_regex_code']) : '';
+		$autoterm_regex_code = !empty($options['autoterm_use_regex']) && !empty($options['terms_regex_code']) ? stripslashes($options['terms_regex_code']) : '';
+		$autoterm_use_taxonomy = !empty($options['autoterm_use_taxonomy']) && (int) $options['autoterm_use_taxonomy'] === 1;
+		$autoterm_useall = !empty($options['autoterm_useall']) && (int) $options['autoterm_useall'] === 1;
+		$autoterm_useonly = !empty($options['autoterm_useonly']) && (int) $options['autoterm_useonly'] === 1;
+		
+		/**
+		 * Filter auto term content
+		 *
+		 * @param string $content Original content to be analyzed. It could include post title, 
+		 * content and/excerpt based on autoterms settings
+		 * @param integer $post_id This is the post id
+		 * @param array $options Autoterm settings
+		 */
+		$content = apply_filters('taxopress_filter_autoterm_content', $content, $object->ID, $options);
 
 		$args = [
 			'post_id' => $object->ID,
-			'settings_data' => TaxoPressAiUtilities::taxopress_get_ai_settings_data(),
+			'settings_data' => $options,
 			'content' => $content,
+			'taxonomy' => $taxonomy,
 			'clean_content' => TaxoPressAiUtilities::taxopress_clean_up_content($content),
 			'content_source' => 'autoterm_' . $content_source
 
@@ -215,7 +275,8 @@ class SimpleTags_Client_Autoterms
 								}
 							} elseif (isset($options['autoterm_word']) && (int) $options['autoterm_word'] == 1) {
 								// Whole word ?
-								if (preg_match("/\b" . preg_quote($find_term) . "\b/i", $content)) {
+								//if (preg_match("/\b" . preg_quote($find_term) . "\b/i", $content)) {
+								if (preg_match("#\b" . preg_quote($find_term) . "\b#i", $content)) {
 									$terms_to_add[] = $term;
 								}
 
@@ -237,7 +298,9 @@ class SimpleTags_Client_Autoterms
 					}
 				}
 			}
-		} elseif ($autoterm_use_ibm_watson > 0 && taxopress_is_pro_version()) {
+		}
+		
+		if ($autoterm_use_ibm_watson > 0 && taxopress_is_pro_version()) {
 			//Autoterm with IBM Watson
 			$ibm_watson_results = TaxoPressAiApi::get_ibm_watson_results($args);
 			if (!empty($ibm_watson_results['results'])) {
@@ -291,7 +354,8 @@ class SimpleTags_Client_Autoterms
 								}
 							} elseif (isset($options['autoterm_word']) && (int) $options['autoterm_word'] == 1) {
 								// Whole word ?
-								if (preg_match("/\b" . preg_quote($find_term) . "\b/i", $content)) {
+								//if (preg_match("/\b" . preg_quote($find_term) . "\b/i", $content)) {
+								if (preg_match("#\b" . preg_quote($find_term) . "\b#i", $content)) {
 									$terms_to_add[] = $term;
 								}
 
@@ -313,7 +377,9 @@ class SimpleTags_Client_Autoterms
 					}
 				}
 			}
-		} elseif ($autoterm_use_dandelion > 0 && taxopress_is_pro_version()) {
+		} 
+		
+		if ($autoterm_use_dandelion > 0 && taxopress_is_pro_version()) {
 			//Autoterm with Dandelion
 			$dandelion_results = TaxoPressAiApi::get_dandelion_results($args);
 			if (!empty($dandelion_results['results'])) {
@@ -367,7 +433,8 @@ class SimpleTags_Client_Autoterms
 								}
 							} elseif (isset($options['autoterm_word']) && (int) $options['autoterm_word'] == 1) {
 								// Whole word ?
-								if (preg_match("/\b" . preg_quote($find_term) . "\b/i", $content)) {
+								//if (preg_match("/\b" . preg_quote($find_term) . "\b/i", $content)) {
+								if (preg_match("#\b" . preg_quote($find_term) . "\b#i", $content)) {
 									$terms_to_add[] = $term;
 								}
 
@@ -389,7 +456,9 @@ class SimpleTags_Client_Autoterms
 					}
 				}
 			}
-		} elseif ($autoterm_use_opencalais > 0 && taxopress_is_pro_version()) {
+		} 
+		
+		if ($autoterm_use_opencalais > 0 && taxopress_is_pro_version()) {
 			//Autoterm with OpenCalais
 			$open_calais_results = TaxoPressAiApi::get_open_calais_results($args);
 			if (!empty($open_calais_results['results'])) {
@@ -448,7 +517,8 @@ class SimpleTags_Client_Autoterms
 								}
 							} elseif (isset($options['autoterm_word']) && (int) $options['autoterm_word'] == 1) {
 								// Whole word ?
-								if (preg_match("/\b" . preg_quote($find_term) . "\b/i", $content)) {
+								//if (preg_match("/\b" . preg_quote($find_term) . "\b/i", $content)) {
+								if (preg_match("#\b" . preg_quote($find_term) . "\b#i", $content)) {
 									$terms_to_add[] = $term;
 								}
 
@@ -470,7 +540,9 @@ class SimpleTags_Client_Autoterms
 					}
 				}
 			}
-		} elseif (isset($options['specific_terms']) && isset($options['autoterm_useonly']) && (int) $options['autoterm_useonly'] === 1) {
+		} 
+		
+		if ($autoterm_use_taxonomy && $autoterm_useonly && !empty($options['specific_terms'])) {
 			// Auto term with specific auto terms list
 			$terms = maybe_unserialize($options['specific_terms']);
 			$terms = taxopress_change_to_array($terms);
@@ -542,7 +614,7 @@ class SimpleTags_Client_Autoterms
 				}
 			}
 			unset($terms, $term);
-		} elseif (isset($options['autoterm_useall']) && (int) $options['autoterm_useall'] === 1) {
+		} elseif ($autoterm_use_taxonomy && $autoterm_useall) {
 			// Auto terms with all terms
 			// Get all terms
 			$terms = $wpdb->get_col($wpdb->prepare("SELECT DISTINCT name
@@ -631,7 +703,7 @@ class SimpleTags_Client_Autoterms
 			$terms_to_add = array_unique($terms_to_add);
 
 			//auto terms limit
-			$terms_limit = isset($options['terms_limit']) ? (int) $options['terms_limit'] : 0;
+			$terms_limit = isset($options['terms_limit']) ? (int) $options['terms_limit'] : 5;
 			if ($terms_limit > 0 && count($terms_to_add) > $terms_limit) {
 				$terms_to_add = array_slice($terms_to_add, 0, $terms_limit);
 			}

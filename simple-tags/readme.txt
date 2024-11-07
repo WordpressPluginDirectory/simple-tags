@@ -3,7 +3,7 @@ Contributors: publishpress, kevinB, stevejburge, andergmartins, olatechpro, ojop
 Tags: category, tag, taxonomy, categories, tag cloud
 Requires at least: 3.3
 Tested up to: 6.6
-Stable tag: 3.25.1
+Stable tag: 3.27.0
 Requires PHP: 7.2.5
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
@@ -267,6 +267,48 @@ IBW Watson is one of the most powerful AI tools available today. The TaxoPress A
 6. If you have a term called “WordPress”, the Auto Links feature will find any instances of “WordPress” in your content and add a link to the archive page for that tag.
 
 == Changelog ==
+
+v3.27.0- 2024-11-05
+* Update: Add setting to Make Linked Terms 1-way or 2-way, #2099
+* Update: Add a subscript 1 or 2 to linked term to make it easy to know if a linked term is the primary term or secondary term, #2099
+* Update: Allow Auto Terms to search more content areas (Taxonomies and Fields), #2096
+* Update: Add a "Preview" area inside Auto Terms, #2231
+* Update: Add support for more statuses in Auto Terms, #2246
+* Update: Add {post_terms} token to OpenAI custom prompt, #2123
+* Update: Add settings to limit Synonyms to preffered taxonomies, #2094
+* Fixed: OpenAI producing sentence instead of individual terms, #2258
+* Fixed: "Show in Filter" not working for builtin taxonomies, #2291
+* Fixed: Existing Content "Limit Auto Terms, based on published date" always defaults to "24 hours ago", #2281
+* Update: Added Option to copy or migrate a term, #1055
+* Update: Update metabox "no results" texts, #2273
+* Update: Add a "Remove Terms" feature on the "Manage Terms" screen, #2271,
+* Update: Add a "Hide Unused Terms" feature on the "Manage Terms" screen, #2271
+* Update: Allow users to customize the date in Related Posts, #2249
+* Update: Improve the "Categories" area in Related Posts, #2248
+* Update: Allow users to choose the size / resolution of the image in Related Posts, #2284
+* Update: Add a Current Post block, #2263
+* Update: Add a Terms Display block, #2262
+* Update: Move Maximum number of categories to advanced category, #2305
+* Update: Small label change for blocks, #2304
+* Update: New label and tab for related posts date format, #2302
+* Update: Labels for post thumbnail, #2303
+* Fixed: "Term link format" doesn't work for Box List, #2250
+* Update: Add "Exclude Terms" feature for "Terms Display", #1376
+* Update: Translation Updates ES-FR-IT v3.26.0, #2252
+
+v3.26.0- 2024-10-08
+* Update: Move metabox API keys and settings from Metabox directly into Auto Terms, #2106
+* Update: Allow multiple sources (Existing terms, OpenAI, etc) to be used together in Auto Terms, #2075
+* Update: Allow users to choose OpenAI models, #2186
+* Update: Improve the Delete Unused Terms feature, #1857
+* Update: Set new defaults for Related Posts, #2218
+* Feature: Allow Auto Term Post filter using 'taxopress_filter_autoterm_content', #2216
+* Fixed: Not possible to save the "Maximum related posts to display" option in Related Posts, #2208
+* Update: Use the "Auto Terms setting" approach for Metaboxes also, #2101
+* Update: Provide layout options for Related Posts, #2155
+* Update: Add sorting to Related Posts Table display, #2185
+* Update: Skip the Media post type in Auto Terms, Auto Links, Terms Display, Terms for Current Post and Related Posts options, #2107
+* Update: Translation updates for TaxoPress v3.25.1, #2193
 
 v3.25.1- 2024-09-05
 * Fixed: Undefined variable $default_featured_media in Related Posts, #2187
